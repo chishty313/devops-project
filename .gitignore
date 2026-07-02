@@ -1,0 +1,28 @@
+# ---- Secrets & state ---- 
+*.tfstate 
+*.tfstate.* 
+*.tfvars 
+!*.example.tfvars 
+.terraform/ 
+.terraform.lock.hcl 
+crash.log 
+
+# Kubeconfig / cloud creds 
+kubeconfig 
+*.kubeconfig 
+azure.auth 
+
+# Env & secrets 
+.env 
+.env.* 
+*.pem 
+*.key 
+
+# Node 
+node_modules/ 
+dist/ 
+build/ 
+npm-debug.log* 
+
+# OS
+.DS_Store
