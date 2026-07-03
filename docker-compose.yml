@@ -1,0 +1,32 @@
+# Docker Compose v2 (no top-level "version" key needed).
+# Brings up both apps on one private bridge network so the frontend can reach
+# the backend by service name.
+
+services:
+  backend:
+    build: ./backend
+    image: devops-assessment/backend:local
+    ports:
+      - "8080:8080"          # exposed so `curl http://localhost:8080` works (assessment requirement)
+    environment:
+      - APP_VERSION=local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [appnet]
+
+  frontend:
+    build: ./frontend
+    image: devops-assessment/frontend:local
+    ports:
+      - "8081:80"            # open http://localhost:8081 in the browser
+    depends_on:
+      backend:
+        condition: service_healthy   # wait until the backend passes its healthcheck
+    networks: [appnet]
+
+networks:
+  appnet:
+    driver: bridge

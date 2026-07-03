@@ -1,0 +1,12 @@
+# Root-level ignore (the assessment expects one here). Each service also has its
+# own .dockerignore, which is what Docker actually reads for the per-service
+# build context (./backend and ./frontend).
+node_modules
+dist
+build
+.git
+.gitignore
+.env
+.env.*
+npm-debug.log
+*.md
