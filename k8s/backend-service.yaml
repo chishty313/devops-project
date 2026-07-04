@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: app
+spec:
+  # ClusterIP = internal only. The backend is never exposed outside the cluster;
+  # the frontend reaches it in-cluster as http://backend:8080.
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 8080
+      targetPort: 8080

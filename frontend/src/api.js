@@ -5,6 +5,7 @@
 export const ENDPOINTS = [
   { key: 'status', label: 'GET /api/status', path: '/api/status' },
   { key: 'info', label: 'GET /api/info', path: '/api/info' },
+  { key: 'db', label: 'GET /api/db', path: '/api/db' },
 ];
 
 // Calls an endpoint and returns a normalized result with latency + parsed body.

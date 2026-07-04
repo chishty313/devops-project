@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: app
+data:
+  APP_VERSION: "v2"
+  # Non-secret DB connection settings. The password is NOT here — it lives in the Secret.
+  DB_HOST: "postgres.devops.internal"
+  DB_PORT: "5432"
+  DB_NAME: "appdb"
+  DB_USER: "appuser"

@@ -8,6 +8,7 @@ function StatusPill({ state }) {
 export default function App() {
   const [status, setStatus] = useState(null);
   const [info, setInfo] = useState(null);
+  const [db, setDb] = useState(null);
   const [error, setError] = useState(null);
   const [log, setLog] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,8 @@ export default function App() {
       setStatus(s.body);
       const i = await callEndpoint('/api/info');
       setInfo(i.body);
+      const d = await callEndpoint('/api/db');
+      setDb(d.body);
     } catch {
       setError('Cannot reach the backend. Is it running on :8080?');
     } finally {
@@ -70,6 +73,13 @@ export default function App() {
         </div>
 
         <div className="card">
+          <h2>Database (private)</h2>
+          <StatusPill state={db ? (db.connected ? 'healthy' : 'unhealthy') : 'unknown'} />
+          <p className="mono">{db?.host || '—'}</p>
+          <p className="dim">{db?.connected ? `db: ${db.database}` : (db?.error || 'not connected')}</p>
+        </div>
+
+        <div className="card">
           <h2>Actions</h2>
           <button className="primary" onClick={refresh} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -86,6 +96,7 @@ export default function App() {
         <div className="btns">
           <button onClick={() => test('/api/status')}>GET /api/status</button>
           <button onClick={() => test('/api/info')}>GET /api/info</button>
+          <button onClick={() => test('/api/db')}>GET /api/db</button>
         </div>
 
         <div className="log">

@@ -1,5 +1,6 @@
 const express = require('express');
 const os = require('os');
+const pool = require('./db');
 
 const app = express();
 const startedAt = Date.now();
@@ -38,6 +39,23 @@ app.get('/api/info', (req, res) => {
     version: process.env.APP_VERSION || 'dev',
     time: new Date().toISOString(),
   });
+});
+
+// DB connectivity check — proves the backend can reach the private PostgreSQL.
+// Returns 503 (not a crash) if the DB is unreachable, so probes stay green.
+app.get('/api/db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT now() AS time, version() AS version');
+    res.json({
+      connected: true,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      time: result.rows[0].time,
+      version: result.rows[0].version,
+    });
+  } catch (err) {
+    res.status(503).json({ connected: false, host: process.env.DB_HOST, error: err.message });
+  }
 });
 
 module.exports = app;

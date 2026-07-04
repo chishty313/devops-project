@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: app
+spec:
+  # ClusterIP — the frontend is exposed to the internet via the Ingress, not
+  # directly. The Ingress controller routes external traffic to this Service.
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80

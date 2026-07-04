@@ -1,0 +1,26 @@
+#cloud-config
+package_update: true
+packages:
+  - postgresql
+  - postgresql-contrib
+write_files:
+  - path: /tmp/init.sql
+    content: |
+      CREATE ROLE ${db_user} WITH LOGIN PASSWORD '${db_password}';
+      CREATE DATABASE ${db_name} OWNER ${db_user};
+  - path: /tmp/setup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      PG_VER=$(ls /etc/postgresql)
+      CONF=/etc/postgresql/$PG_VER/main
+      # Listen on all interfaces so the private IP accepts connections.
+      echo "listen_addresses = '*'" >> $CONF/postgresql.conf
+      # Allow password auth only from the AKS and DB subnets.
+      echo "host all all ${aks_subnet_cidr} md5" >> $CONF/pg_hba.conf
+      echo "host all all ${db_subnet_cidr} md5" >> $CONF/pg_hba.conf
+      systemctl restart postgresql
+      sudo -u postgres psql -f /tmp/init.sql
+runcmd:
+  - /tmp/setup.sh

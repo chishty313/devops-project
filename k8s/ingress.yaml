@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: app
+  annotations:
+    # cert-manager watches this and issues a Let's Encrypt cert into the TLS secret.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.chishty.me
+      secretName: app-tls
+  rules:
+    - host: app.chishty.me
+      http:
+        paths:
+          # Only the frontend is exposed. It proxies /api to the backend internally,
+          # so the backend Service stays private.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
