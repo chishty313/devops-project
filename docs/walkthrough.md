@@ -116,3 +116,84 @@ cancelled the apply.
 export ARM_ACCESS_KEY=$(az storage account keys list \
   -g rg-devops-tfstate -n tfstatedevops1783530332 --query "[0].value" -o tsv)
 ```
+
+### Building the infrastructure, module by module
+Each module was written, `plan`-reviewed, and `apply`-ed on its own so a failure had a
+small blast radius:
+- **network** — VNet `10.20.0.0/16`, `snet-aks` and `snet-db`, and the NSG that allows
+  5432 *only* from the AKS subnet (the core of Task 4).
+- **acr** + **monitoring** — a registry (admin disabled) and a Log Analytics workspace.
+- **aks** — the cluster on the custom subnet, with a user-assigned identity. Here the
+  **constrained Owner** bit us: a custom-subnet cluster needs a *Network Contributor*
+  role assignment, and the kubelet needs *AcrPull* — neither of which my ABAC condition
+  lets me assign. The workaround: assign **Owner** (the only role I'm allowed to grant),
+  narrowly scoped to the VNet and the ACR. Over-privileged but scoped, self-service, and
+  documented — the module code still defaults to the correct least-privilege roles.
+- **database** — the managed PostgreSQL Flexible Server was **offer-restricted** in the
+  region, so I pivoted to a **PostgreSQL VM** in `snet-db` (no public IP), configured by
+  cloud-init, with a private DNS A record `postgres.devops.internal → 10.20.2.4`.
+
+Two subscription restrictions shaped the build and are worth remembering: **B-series VMs
+were blocked** (switched to `standard_d2as_v7`), and **managed PostgreSQL was region-
+restricted** (switched to a VM). Both are documented in the troubleshooting log — the
+lesson being that "not allowed" (offer/policy) is different from "out of quota".
+
+---
+
+## Phase 4 — Kubernetes manifests + deploy (Task 3)
+
+**Goal:** the apps live on AKS, exposed on HTTPS, backend internal-only.
+
+Built the images straight into ACR (`az acr build`, tagged `v1` — never `latest`), then
+applied the manifests: 2 replicas each, readiness + liveness probes, resource
+requests/limits, backend config from a **ConfigMap** and the DB password from a **Secret**
+created at deploy time from `terraform output` (never in git). The backend Service is
+**ClusterIP** (internal); the ingress exposes only the frontend, which proxies `/api` to
+the backend — so the backend is never directly reachable from outside. Confirmed
+load-balancing by calling `/api/info` twice and watching the pod hostname change.
+
+### The five-layer ingress→TLS debugging saga (the interesting part)
+Getting `https://app.chishty.me` live meant peeling back five layers, each masking the
+next:
+1. **NSG missing 80/443** — a bring-your-own NSG on the AKS subnet means AKS doesn't add
+   the LoadBalancer rules; I added them.
+2. **Wrong NSG destination** — the rule must target the LB frontend (`*`), not the subnet
+   CIDR, because Azure evaluates the flow against the public IP.
+3. **The real blocker — health probe** — even with NSGs open, the LB timed out. The
+   Azure HTTP health probe hit `/` and got a **308** from ingress-nginx; Azure only treats
+   **200** as healthy, so every backend was marked down and traffic was black-holed. Fixed
+   by pointing the probe at `/healthz`.
+4. **cert-manager backoff** — after the earlier failures the Certificate sat in a retry
+   backoff; deleting it let ingress-shim recreate it fresh.
+5. **Success** — with HTTP reachable, the Let's Encrypt HTTP-01 challenge passed and the
+   cert issued in ~26 seconds. `curl -I https://app.chishty.me` → `HTTP/2 200` with HSTS.
+
+This is fully written up in [`troubleshooting-log.md`](./troubleshooting-log.md) — the
+"allowed but still times out → it's the health probe" lesson is the kind of layered
+diagnosis the job is really about.
+
+---
+
+## Phase 5 — Private database connectivity (Task 4)
+
+**Goal:** the backend actually talks to the private database, and prove it's not public.
+
+Added a `/api/db` endpoint (node-postgres) that connects using the ConfigMap/Secret env
+vars and runs a real query, plus a **Database (private)** card in the dashboard. Rebuilt
+as `v2` and rolled it out (a real rolling update, no downtime). Verified the whole private
+path:
+- `nc postgres.devops.internal 5432` from a Pod → `10.20.2.4:5432 open` (private DNS +
+  NSG + VM listening).
+- `curl https://app.chishty.me/api/db` → `{"connected":true, ... "PostgreSQL 14.23"}`.
+- `az vm show` → **no public IP**.
+
+Design and verification are documented in [`private-database.md`](./private-database.md).
+
+---
+
+## What I'd change for production
+Captured in [`future-improvements.md`](./future-improvements.md): Key Vault-backed
+secrets, image scanning, Prometheus/Grafana alerting, HPA + cluster autoscaler, a private
+API server, a WAF, GitOps with Argo CD, canary deploys, DB backup/DR, default-deny
+NetworkPolicies, and using least-privilege roles (Network Contributor / AcrPull) once the
+ABAC constraint is lifted.
